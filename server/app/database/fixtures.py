@@ -7,5 +7,11 @@ FIXTURES = MongoDB_Fixtures(
         "_id": ObjectId("652790328c73b750984aee34"), 
         "name": "REQUIRE_VALIDATED_EMAIL_FOR_LOGIN",
         "value": True
+    }),
+        MongoDB_Fixture("config", {
+        "_id": ObjectId("652790328c73b750984aee35"), 
+        "name": "spoofConfig",
+        "value": True
     })
+
 )
