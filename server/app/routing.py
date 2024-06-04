@@ -55,8 +55,8 @@ load_dotenv()  # Load environment variables
 # files_collection = db.files  # Use your actual collection name for storing file data
 client = MongoClient('mongodb://localhost:27017/')
 db = client['file_db']  # Use your preferred DB name
-collection = db['files']  # Use your preferred collection name
-
+files_collection = db['files']  # Use your preferred collection name
+history_collection = db['history']
 #VERY IMPORTANT
 #PLEASE READ
 #SHAYS ROUTE DEFINITONS PRE FORMAT MATCHING
@@ -108,7 +108,7 @@ def handle_file_upload(request):
     }
 
     # Insert the document into MongoDB
-    result = collection.insert_one(file_document)
+    result = files_collection.insert_one(file_document)
 
     if result.inserted_id:
         return {'message': 'File uploaded successfully', 'id': str(result.inserted_id)}, 200
@@ -125,7 +125,7 @@ def list_files(request):
     # # Create a numbered list of files
     # files_list = ' AP'.join(f"{index + 1}. {file}" for index, file in enumerate(files))
     # return API_Message_Response(files_list)
-    files = collection.find({}, {'file_content': 0})  # Exclude file_content from the results
+    files = files_collection.find({}, {'file_content': 0})  # Exclude file_content from the results
     file_list = [{
         'file_name': file['file_name'],
         'file_extension': file['file_extension'],
@@ -282,6 +282,8 @@ def makeEmbedding(request):
     manager = ManagerDriver(docName,question)
     embedding = manager.create_embedding()
     return API_Message_Response(f"Embedding: {embedding}")
+
+
 
 
 
