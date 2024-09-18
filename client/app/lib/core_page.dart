@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:flongo_client/utilities/http_client.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 
@@ -40,9 +41,13 @@ class _CorePageState extends State<CorePage> {
 
   Future<void> uploadFile(
       String fileName, String fileExtension, String fileBytesBase64) async {
+    String? userId = HTTPClient
+        .getIdentity(); // Ensure you have a way to get the current user's ID
+
     var url = Uri.parse('http://localhost:8080/files');
     var response = await http.post(url,
         body: jsonEncode({
+          'user_id': userId,
           'fileName': fileName,
           'fileExtension': fileExtension,
           'fileData': fileBytesBase64,
@@ -52,18 +57,20 @@ class _CorePageState extends State<CorePage> {
         });
 
     if (response.statusCode == 200) {
-      // Handle success
       print('File uploaded successfully: ${response.body}');
     } else {
-      // Handle error
       print('Failed to upload file: ${response.statusCode}');
     }
   }
 
   Future<void> sendQuestion() async {
+    String userId =
+        getCurrentUserId(); // Ensure you have a way to get the current user's ID
+
     var url = Uri.parse('http://localhost:8080/getAnswer');
     var response = await http.post(url,
         body: jsonEncode({
+          'user_id': userId,
           'docName': selectedFile,
           'question': currentQuestion,
         }),
@@ -72,31 +79,36 @@ class _CorePageState extends State<CorePage> {
         });
 
     if (response.statusCode == 200) {
-      // Handle success
       print('Question sent successfully: ${response.body}');
       setState(() {
         returnedAnswer = jsonDecode(response.body)['Answer'][0];
       });
     } else {
-      // Handle error
       print('Failed to send question: ${response.statusCode}');
     }
   }
 
   // Add a new function to fetch the file list
   Future<void> fetchFiles() async {
-    var url = Uri.parse(
-        'http://localhost:8080/files'); // Update with your backend URL
-    var response = await http.get(url);
+    String userId =
+        getCurrentUserId(); // Ensure you have a way to get the current user's ID
+
+    var url = Uri.parse('http://localhost:8080/files');
+    var response = await http.post(url,
+        body: jsonEncode({
+          'user_id': userId,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        });
+
     if (response.statusCode == 200) {
       List<dynamic> files = jsonDecode(response.body);
       setState(() {
         uploadedFiles =
             files.map((file) => file['file_name'] as String).toList();
-        // Update your state to refresh the UI with the fetched file list
       });
     } else {
-      // Handle errors, possibly by showing an error message to the user
       print('Failed to fetch files');
     }
   }

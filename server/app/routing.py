@@ -90,8 +90,9 @@ def delete_file(request):
 # also should i keep the old logic like is the file = request.files['file'] even necessary now, that the argument is different
 def handle_file_upload(request):
     # Check if the post request has the file part
-    if 'fileName' not in request.payload:
-        return 'No file part in the request', 400
+    if 'fileName' not in request.payload and 'user_id' not in request.payload:
+        return 'File name or user ID not in the request', 400
+    user_id = request.identity._id
     file_name = request.payload['fileName']
     file_extension = request.payload['fileExtension']
     file_data_base64 = request.payload['fileData']
@@ -102,9 +103,13 @@ def handle_file_upload(request):
     # but as per the requirement, we're storing the content in MongoDB.
     # MongoDB document schema example
     file_document = {
+
+        ###CHECK BELOW
+        'user_id': ObjectId(user_id),
         'file_name': file_name,
         'file_extension': file_extension,
         'file_content': Binary(file_data_binary),
+        'created_on': datetime.utcnow()
     }
 
     # Insert the document into MongoDB
@@ -125,7 +130,15 @@ def list_files(request):
     # # Create a numbered list of files
     # files_list = ' AP'.join(f"{index + 1}. {file}" for index, file in enumerate(files))
     # return API_Message_Response(files_list)
-    files = files_collection.find({}, {'file_content': 0})  # Exclude file_content from the results
+
+
+    # if 'user_id' not in request.payload:
+    #     return 'User ID not in the request', 400
+
+    # user_id = request.payload['user_id']
+    user_id = request.identity._id
+    files = files_collection.find({"user_id": ObjectId(user_id)}, {'file_content': 0})  # Exclude file_content from the results
+
     file_list = [{
         'file_name': file['file_name'],
         'file_extension': file['file_extension'],
@@ -173,12 +186,23 @@ def getDate(request):
     return API_Message_Response(datetime.now())
 
 def makeAnswer(request):
+    # version pre request.idenity._id changes in case it doesnt work
+    # if 'user_id' not in request.payload or 'docName' not in request.payload or 'question' not in request.payload:
+    #     return 'User ID, document name, or question not in the request', 400
+    # user_id = request.payload.get("user_id")
+    if 'docName' not in request.payload or 'question' not in request.payload:
+        return 'Document name or question not in the request', 400
+    # Get the authenticated user's ID from request.identity._id
+    user_id = request.identity._id
+    # end of changes made
     question = request.payload.get("question")
     docName = request.payload.get("docName")
 
     # Get binary file and its extension from DB
-    with MongoDB_Database("files", "file_db") as filedb:
-        result = filedb.find_one({"file_name": docName})
+    result = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
+
+    if not result:
+        return API_JSON_Response({"Error": "File not found."}, status=404)
     
     file_content = result["file_content"]  # Assuming this is a base64 encoded string
     file_extension = result["file_extension"]  # Retrieve the file extension from the database

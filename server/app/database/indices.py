@@ -14,4 +14,7 @@ INDICES = MongoDB_Indices(
     # Email Confirmation
     MongoDB_Index("email_confirmations", "createdOn", properties={"expireAfterSeconds": 600}),
     MongoDB_Index("email_confirmations", "user_id"),
+    # Files
+    MongoDB_Index("files", "user_id"),  # Index to query files by user
+    MongoDB_Index("files", "file_name"),  # Optional: Index on file name
 )
