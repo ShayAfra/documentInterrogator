@@ -39,38 +39,60 @@ class _CorePageState extends State<CorePage> {
     fetchFiles(); // Fetch files from the server when the component loads
   }
 
+  // Updated uploadFile function
   Future<void> uploadFile(
       String fileName, String fileExtension, String fileBytesBase64) async {
-    String? userId = HTTPClient
-        .getIdentity(); // Ensure you have a way to get the current user's ID
-
     var url = Uri.parse('http://localhost:8080/files');
-    var response = await http.post(url,
-        body: jsonEncode({
-          'user_id': userId,
+    HTTPClient("/files").post(
+        body: {
           'fileName': fileName,
           'fileExtension': fileExtension,
           'fileData': fileBytesBase64,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
+        },
+        onSuccess: (response) {
+          print('File uploaded successfully: ${response.body}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('File uploaded successfully!')),
+          );
+        },
+        onError: (response) {
+          print('Failed to upload file: ${response.statusCode}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload file.')),
+          );
         });
 
-    if (response.statusCode == 200) {
-      print('File uploaded successfully: ${response.body}');
-    } else {
-      print('Failed to upload file: ${response.statusCode}');
-    }
+    // Removed user_id from the body since it's handled on the server-side
+    // var response = await http.post(url,
+    //     body: jsonEncode({
+    //       'fileName': fileName,
+    //       'fileExtension': fileExtension,
+    //       'fileData': fileBytesBase64,
+    //     }),
+    //     headers: {
+    //       'Content-Type': 'application/json',
+    //     });
+
+    // if (response.statusCode == 200) {
+    //   print('File uploaded successfully: ${response.body}');
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(content: Text('File uploaded successfully!')),
+    //   );
+    // } else {
+    //   print('Failed to upload file: ${response.statusCode}');
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(content: Text('Failed to upload file.')),
+    //   );
+    // }
   }
 
+  // Updated sendQuestion function
   Future<void> sendQuestion() async {
-    String userId =
-        getCurrentUserId(); // Ensure you have a way to get the current user's ID
-
     var url = Uri.parse('http://localhost:8080/getAnswer');
+
+    // Removed user_id from the request body since it's handled on the server-side
     var response = await http.post(url,
         body: jsonEncode({
-          'user_id': userId,
           'docName': selectedFile,
           'question': currentQuestion,
         }),
@@ -85,22 +107,21 @@ class _CorePageState extends State<CorePage> {
       });
     } else {
       print('Failed to send question: ${response.statusCode}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send question.')),
+      );
     }
   }
 
   // Add a new function to fetch the file list
+  // Updated fetchFiles function
   Future<void> fetchFiles() async {
-    String userId =
-        getCurrentUserId(); // Ensure you have a way to get the current user's ID
-
     var url = Uri.parse('http://localhost:8080/files');
-    var response = await http.post(url,
-        body: jsonEncode({
-          'user_id': userId,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        });
+
+    // Removed user_id from the request body since it's handled on the server-side
+    var response = await http.get(url, headers: {
+      'Content-Type': 'application/json',
+    });
 
     if (response.statusCode == 200) {
       List<dynamic> files = jsonDecode(response.body);
@@ -109,7 +130,10 @@ class _CorePageState extends State<CorePage> {
             files.map((file) => file['file_name'] as String).toList();
       });
     } else {
-      print('Failed to fetch files');
+      print('Failed to fetch files: ${response.statusCode}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to fetch files.')),
+      );
     }
   }
 
