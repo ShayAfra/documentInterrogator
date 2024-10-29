@@ -13,6 +13,6 @@ SETTINGS = App_Settings(
         log_level=LOG_LEVELS.DEBUG
     ),
     jwt=JWT_Settings(
-        enable_csrf_protection=True
+        enable_csrf_protection=False
     )
 )

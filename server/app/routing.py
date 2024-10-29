@@ -55,8 +55,10 @@ load_dotenv()  # Load environment variables
 # files_collection = db.files  # Use your actual collection name for storing file data
 client = MongoClient('mongodb://localhost:27017/')
 db = client['file_db']  # Use your preferred DB name
-files_collection = db['files']  # Use your preferred collection name
-history_collection = db['history']
+# Collections
+files_collection = db['files']  # Collection for storing file data
+history_collection = db['history']  # Collection for storing user questions and answers
+embeddings_collection = db['embeddings']  # Collection for storing document embeddings
 #VERY IMPORTANT
 #PLEASE READ
 #SHAYS ROUTE DEFINITONS PRE FORMAT MATCHING
@@ -73,39 +75,43 @@ def handle_get(request):
     return API_Message_Response(file_path)
 
 def delete_file(request):
-    file_name = request.payload.get('file_name')
-    directory = 'docs'
-    file_path = os.path.join(directory, file_name)
-    # Check if file exists
-    if not os.path.isfile(file_path):
-        return API_Message_Response(f"File {file_name} not found", status_code=404)
-    # Attempt to delete the file
-    try:
-        os.remove(file_path)
-        return API_Message_Response(f"File {file_name} deleted successfully")
-    except Exception as e:
-        return API_Message_Response(f"An error occurred: {e}", status_code=500)
+    if 'file_name' not in request.payload:
+        return 'File name not in the request', 400
 
-# double check with Pete that logic order is
-# also should i keep the old logic like is the file = request.files['file'] even necessary now, that the argument is different
+    # Get the authenticated user's ID from request.identity._id
+    user_id = request.identity._id
+    file_name = request.payload['file_name']
+
+    # Attempt to delete the file that belongs to the authenticated user
+    result = files_collection.find_one_and_delete({"user_id": ObjectId(user_id), "file_name": file_name})
+
+    if result:
+        return API_Message_Response(f"File {file_name} deleted successfully")
+    else:
+        return API_Message_Response(f"File {file_name} not found or not owned by the user", status_code=404)
+
 def handle_file_upload(request):
     # Check if the post request has the file part
-    if 'fileName' not in request.payload and 'user_id' not in request.payload:
-        return 'File name or user ID not in the request', 400
+    if 'fileName' not in request.payload:
+        return 'File name not in the request', 400
+
+    # TEST
+    # Ensure the user is authenticated
+    if not request.identity:
+        return API_Message_Response("User not authenticated", status_code=401)
+
+    # Get the authenticated user's ID from request.identity._id
     user_id = request.identity._id
     file_name = request.payload['fileName']
     file_extension = request.payload['fileExtension']
     file_data_base64 = request.payload['fileData']
+
     # Decode the Base64 file data
     file_data_binary = base64.b64decode(file_data_base64)
     
-    # Here you can choose to save the file directly to the filesystem,
-    # but as per the requirement, we're storing the content in MongoDB.
-    # MongoDB document schema example
+    # Create the document to insert into MongoDB
     file_document = {
-
-        ###CHECK BELOW
-        'user_id': ObjectId(user_id),
+        'user_id': ObjectId(user_id),  # Associate the file with the authenticated user
         'file_name': file_name,
         'file_extension': file_extension,
         'file_content': Binary(file_data_binary),
@@ -119,10 +125,7 @@ def handle_file_upload(request):
         return {'message': 'File uploaded successfully', 'id': str(result.inserted_id)}, 200
     else:
         return {'message': 'Failed to upload file'}, 500
-    
-    # filename = secure_filename(file.filename)
-    # file.save(os.path.join('docs', filename))
-    # return 'File uploaded successfully', 201
+
     
 def list_files(request):
     # directory = '/Users/shay/Desktop/repo/documentInterrogator/server/app/utilities/docs'  # Folder where files are stored
@@ -148,32 +151,52 @@ def list_files(request):
 
 
 def delete_embedding(request):
+    if 'fileName' not in request.payload:
+        return 'Document name not in the request', 400
+
+    # Get the authenticated user's ID from request.identity._id
+    user_id = request.identity._id
     file_name_with_extension = request.payload.get('fileName')
     file_name_without_extension = os.path.splitext(file_name_with_extension)[0]
+
+    # Ensure the embedding belongs to the authenticated user
+    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": file_name_with_extension})
+    if not file_record:
+        return API_Message_Response(f"Embedding for document {file_name_with_extension} not found or not owned by the user", status_code=404)
+
+    # Attempt to delete the embedding
     directory = 'chroma_store'
     file_path = os.path.join(directory, file_name_without_extension)
-    # Check if file exists
-    # if not os.path.isfile(file_path):
-    #     return API_Message_Response(f"File {file_name_without_extension} not found", status_code=404)
-    # Attempt to delete the file
+    
     try:
         shutil.rmtree(file_path)
-        return API_Message_Response(f"Folder {file_name_without_extension} deleted successfully")
+        return API_Message_Response(f"Embedding for {file_name_with_extension} deleted successfully")
     except Exception as e:
         return API_Message_Response(f"An error occurred: {e}", status_code=500)
 
+
 def handle_embedding_upload(request):
-    # Check if the post request has the file part
+    # Check if the post request has the necessary data
+    if 'question' not in request.payload or 'docName' not in request.payload:
+        return 'Question or document name not in the request', 400
+
+    # Get the authenticated user's ID from request.identity._id
+    user_id = request.identity._id
     question = request.payload.get("question")
     file_name_with_extension = request.payload.get("docName")
+
+    # Ensure the document belongs to the authenticated user before proceeding
+    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": file_name_with_extension})
+    if not file_record:
+        return API_Message_Response(f"Document {file_name_with_extension} not found or not owned by the user", status_code=404)
+
+    # Process the embedding
     manager = ManagerDriver(file_name_with_extension, question)
     embedding = manager.get_embedding()
-    # file_name_without_extension = os.path.splitext(file_name_with_extension)[0]
-    # directory = 'chroma_store'
-    # file_path = os.path.join(directory, file_name_without_extension)
-    # with open(file_path, 'w') as file:
-    #     file.write(embedding)  # Assuming embedding is a string or can be converted to a string
-    return API_Message_Response(f"Embedding saved as {embedding}")
+
+    # Assuming there’s a process to store or associate the embedding with the user (if needed)
+    return API_Message_Response(f"Embedding created and associated with the user: {embedding}")
+
     
 def list_embeddings(request):
     directory = 'chroma_store'  # Folder where files are stored
@@ -219,6 +242,8 @@ def makeAnswer(request):
         manager = ManagerDriver(temp_file_path, question)
         answer = manager.make_answer()
 
+        # Store the question and answer in the history collection
+        store_question_answer(request, question, answer, docName)
         return API_JSON_Response({"Answer": answer})
     
     except Exception as e:
@@ -294,18 +319,103 @@ def makeAnswer(request):
 #     return API_JSON_Response({"Answer": answer})
 
 def getEmbedding(request):
-    question = request.payload.get("question")
+    if 'docName' not in request.payload or 'question' not in request.payload:
+        return 'Document name or question not in the request', 400
+
+    # Get the authenticated user's ID from request.identity._id
+    user_id = request.identity._id
     docName = request.payload.get("docName")
-    manager = ManagerDriver(docName,question)
+    question = request.payload.get("question")
+
+    # Ensure the document belongs to the authenticated user before processing
+    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
+    if not file_record:
+        return API_Message_Response(f"Document {docName} not found or not owned by the user", status_code=404)
+
+    # Process the embedding
+    manager = ManagerDriver(docName, question)
     embedding = manager.get_embedding()
+    
     return API_Message_Response(f"Embedding: {embedding}")
 
+
 def makeEmbedding(request):
-    question = request.payload.get("question")
+    if 'docName' not in request.payload or 'question' not in request.payload:
+        return 'Document name or question not in the request', 400
+
+    # Get the authenticated user's ID from request.identity._id
+    user_id = request.identity._id
     docName = request.payload.get("docName")
-    manager = ManagerDriver(docName,question)
+    question = request.payload.get("question")
+
+    # Ensure the document belongs to the authenticated user before processing
+    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
+    if not file_record:
+        return API_Message_Response(f"Document {docName} not found or not owned by the user", status_code=404)
+
+    # Create the embedding
+    manager = ManagerDriver(docName, question)
     embedding = manager.create_embedding()
+
+    # Store the embedding in the embeddings collection
+    store_embedding(request, docName, embedding)
+    
     return API_Message_Response(f"Embedding: {embedding}")
+
+def store_question_answer(request, question, answer, doc_name):
+    user_id = request.identity._id
+    history_document = {
+        'user_id': ObjectId(user_id),
+        'question': question,
+        'answer': answer,
+        'doc_name': doc_name,
+        'created_on': datetime.utcnow()
+    }
+    # Insert the document into the history collection
+    history_collection.insert_one(history_document)
+
+def store_embedding(request, doc_name, embedding):
+    user_id = request.identity._id
+    embedding_document = {
+        'user_id': ObjectId(user_id),
+        'doc_name': doc_name,
+        'embedding': embedding,
+        'created_on': datetime.utcnow()
+    }
+    # Insert the document into the embeddings collection
+    embeddings_collection.insert_one(embedding_document)
+
+def get_user_history(request):
+    user_id = request.identity._id
+
+    # Retrieve all history entries for the authenticated user
+    history_entries = history_collection.find({"user_id": ObjectId(user_id)})
+
+    history_list = [{
+        'question': entry['question'],
+        'answer': entry['answer'],
+        'doc_name': entry['doc_name'],
+        'created_on': entry['created_on'].isoformat()
+    } for entry in history_entries]
+
+    return API_JSON_Response({"history": history_list})
+
+def get_user_embeddings(request):
+    user_id = request.identity._id
+
+    # Retrieve all embeddings for the authenticated user
+    embeddings = embeddings_collection.find({"user_id": ObjectId(user_id)})
+
+    embeddings_list = [{
+        'doc_name': entry['doc_name'],
+        'embedding': entry['embedding'],
+        'created_on': entry['created_on'].isoformat()
+    } for entry in embeddings]
+
+    return API_JSON_Response({"embeddings": embeddings_list})
+
+
+
 
 
 
@@ -389,10 +499,14 @@ APP_ROUTES = App_Routes(
         Route(
         url = '/files',
         handler=Route_Handler(
+
             POST= handle_file_upload,
             GET= list_files
         ),
+        permissions=Route_Permissions(GET='user', POST='user'),
+
         # permissions=Route_Permissions(POST='user'),
+        enable_CORS=False,
         log_level= LOG_LEVELS.DEBUG
     ),
     Route(
@@ -467,5 +581,24 @@ APP_ROUTES = App_Routes(
             GET= makeEmbedding
         ),
         log_level= LOG_LEVELS.DEBUG
+    ),
+     # Route to get user history
+    Route(
+        url='/history',
+        handler=Route_Handler(
+            GET=get_user_history
+        ),
+        permissions=Route_Permissions(GET='user'),
+        log_level=LOG_LEVELS.DEBUG
+    ),
+
+    # Route to get user embeddings
+    Route(
+        url='/user-embeddings',
+        handler=Route_Handler(
+            GET=get_user_embeddings
+        ),
+        permissions=Route_Permissions(GET='user'),
+        log_level=LOG_LEVELS.DEBUG
     ),
 )
