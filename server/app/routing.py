@@ -19,6 +19,8 @@ from .routes.authenticate.transformer import AUTHENTICATION_ROUTE_RESPONSE_TRANS
 from .routes.email_confirmation.route import Email_Confirmation_Route_Handler
 from .routes.email_confirmation.schema import EMAIL_CONFIRMATION_ROUTE_REQUEST_SCHEMA
 
+from bson import ObjectId
+
 #LOOK HERE ITS IMPORTANT
 #shays integrated server side- pre-format matching
 #app
@@ -499,14 +501,12 @@ APP_ROUTES = App_Routes(
         Route(
         url = '/files',
         handler=Route_Handler(
-
             POST= handle_file_upload,
             GET= list_files
         ),
         permissions=Route_Permissions(GET='user', POST='user'),
 
         # permissions=Route_Permissions(POST='user'),
-        enable_CORS=False,
         log_level= LOG_LEVELS.DEBUG
     ),
     Route(
@@ -566,6 +566,7 @@ APP_ROUTES = App_Routes(
             POST= makeAnswer
 
         ),
+        permissions=Route_Permissions(POST='user'),
         log_level= LOG_LEVELS.DEBUG
     ),
     Route(
