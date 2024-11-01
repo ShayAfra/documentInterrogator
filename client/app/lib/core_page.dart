@@ -88,29 +88,24 @@ class _CorePageState extends State<CorePage> {
 
   // Updated sendQuestion function
   Future<void> sendQuestion() async {
-    var url = Uri.parse('http://localhost:8080/getAnswer');
-
-    // Removed user_id from the request body since it's handled on the server-side
-    var response = await http.post(url,
-        body: jsonEncode({
-          'docName': selectedFile,
-          'question': currentQuestion,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
+    HTTPClient("/getAnswer").post(
+      body: {
+        'docName': selectedFile,
+        'question': currentQuestion,
+      },
+      onSuccess: (response) {
+        print('Question sent successfully: ${response.body}');
+        setState(() {
+          returnedAnswer = jsonDecode(response.body)['Answer'][0];
         });
-
-    if (response.statusCode == 200) {
-      print('Question sent successfully: ${response.body}');
-      setState(() {
-        returnedAnswer = jsonDecode(response.body)['Answer'][0];
-      });
-    } else {
-      print('Failed to send question: ${response.statusCode}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send question.')),
-      );
-    }
+      },
+      onError: (response) {
+        print('Failed to send question: ${response.statusCode}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send question.')),
+        );
+      }
+    );
   }
 
   // Add a new function to fetch the file list
