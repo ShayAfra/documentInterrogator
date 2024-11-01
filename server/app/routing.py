@@ -566,6 +566,7 @@ APP_ROUTES = App_Routes(
             POST= makeAnswer
 
         ),
+        permissions=Route_Permissions(POST='user'),
         log_level= LOG_LEVELS.DEBUG
     ),
     Route(
