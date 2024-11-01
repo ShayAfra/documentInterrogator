@@ -42,7 +42,7 @@ class _CorePageState extends State<CorePage> {
   // Updated uploadFile function
   Future<void> uploadFile(
       String fileName, String fileExtension, String fileBytesBase64) async {
-    var url = Uri.parse('http://localhost:8080/files');
+
     HTTPClient("/files").post(
         body: {
           'fileName': fileName,
@@ -116,25 +116,24 @@ class _CorePageState extends State<CorePage> {
   // Add a new function to fetch the file list
   // Updated fetchFiles function
   Future<void> fetchFiles() async {
-    var url = Uri.parse('http://localhost:8080/files');
-
-    // Removed user_id from the request body since it's handled on the server-side
-    var response = await http.get(url, headers: {
-      'Content-Type': 'application/json',
-    });
-
-    if (response.statusCode == 200) {
-      List<dynamic> files = jsonDecode(response.body);
-      setState(() {
-        uploadedFiles =
-            files.map((file) => file['file_name'] as String).toList();
-      });
-    } else {
-      print('Failed to fetch files: ${response.statusCode}');
-      ScaffoldMessenger.of(context).showSnackBar(
+    HTTPClient("/files").get(
+      // Function that runs on API call success
+      onSuccess: (response) {
+        List<dynamic> files = jsonDecode(response.body);
+        setState(() {
+          uploadedFiles =
+              files.map((file) => file['file_name'] as String).toList();
+        });
+      },
+      // Function that runs on API 
+      onError: (response) {
+        print('Failed to fetch files: ${response.toString()}');
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to fetch files.')),
       );
-    }
+      } 
+    );
+
   }
 
   @override
