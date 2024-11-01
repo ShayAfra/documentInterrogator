@@ -1,1 +1,6 @@
 flongo-framework >= 0.3.33
+chromadb==0.5.17
+langchain==0.3.6
+langchain-community==0.3.4
+openai==1.53.0
+pydantic==2.9.2
