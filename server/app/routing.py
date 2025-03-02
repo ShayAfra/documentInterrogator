@@ -24,10 +24,7 @@ from bson import ObjectId
 #LOOK HERE ITS IMPORTANT
 #shays integrated server side- pre-format matching
 #app
-from flongo_framework.application import Application
-#chatbot
-from openai_client import Chat_Bot_Client
-from openai_client import ROLE
+
 # utils
 from flongo_framework.api.routing.utils import Authentication_Util
 #Routing
