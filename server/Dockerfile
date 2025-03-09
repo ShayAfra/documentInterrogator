@@ -8,7 +8,7 @@ COPY app/ /app/app
 COPY setup/requirements.txt /app/setup/requirements.txt
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libffi-dev libssl-dev python3-dev && \
+    apt-get install -y --no-install-recommends gcc libffi-dev libssl-dev python3-dev sqlite3 && \
     pip install --upgrade pip && \
     pip install --no-cache-dir -r /app/setup/requirements.txt && \
     apt-get remove -y gcc libffi-dev libssl-dev python3-dev && \
@@ -17,7 +17,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Final image
-FROM python:3.10-slim-buster
+FROM python:3.10-slim-bookworm
 
 # Copy required files from build stage
 COPY --from=build /usr/local /usr/local
