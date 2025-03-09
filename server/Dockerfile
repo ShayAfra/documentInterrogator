@@ -1,5 +1,5 @@
 # Server Build
-FROM python:3.10-slim-buster as build
+FROM python:3.11-bookworm as build
 
 LABEL maintainer="Peter Swanson | pswanson@ucdavis.edu"
 
@@ -7,17 +7,22 @@ WORKDIR /app
 COPY app/ /app/app
 COPY setup/requirements.txt /app/setup/requirements.txt
 
+# Install Base image deps
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libffi-dev libssl-dev python3-dev sqlite3 && \
-    pip install --upgrade pip && \
-    pip install --no-cache-dir -r /app/setup/requirements.txt && \
-    apt-get remove -y gcc libffi-dev libssl-dev python3-dev && \
+    apt-get install -y --no-install-recommends gcc libffi-dev libssl-dev python3-dev
+
+# Install Python deps
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r /app/setup/requirements.txt
+
+# Remove installer deps from final image
+RUN apt-get remove -y gcc libffi-dev libssl-dev python3-dev && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Final image
-FROM python:3.10-slim-bookworm
+FROM python:3.11-bookworm
 
 # Copy required files from build stage
 COPY --from=build /usr/local /usr/local
@@ -25,6 +30,9 @@ COPY --from=build /app /app
 COPY entrypoint.sh /entrypoint.sh
 
 WORKDIR /app
+
+# Required for ChromaDB
+RUN apt-get update && apt-get install sqlite3
 
 # Set environment variables with default values
 ENV FLASK_APP=app.main:get_app
