@@ -30,18 +30,14 @@ from flongo_framework.api.routing.utils import Authentication_Util
 #Routing
 from flongo_framework.api.routing import App_Routes, Route, Route_Handler, Default_Route_Handler, Route_Permissions
 from flongo_framework.api.responses import API_JSON_Response, API_Message_Response
-from flongo_framework.config.settings import App_Settings, Flask_Settings, MongoDB_Settings
 from flongo_framework.config.enums.logs.log_levels import LOG_LEVELS
-from werkzeug.utils import secure_filename
 import os
 import shutil
 import base64
-import tempfile
-from tempfile import NamedTemporaryFile
-from pymongo import MongoClient
 from bson import Binary
 from dotenv import load_dotenv
 from datetime import datetime
+from .utilities.extract_v2 import EmbeddingManager
 from .utilities.document_extract import ManagerDriver
 
 
@@ -93,16 +89,13 @@ def handle_file_upload(request):
     file_name = request.payload['fileName']
     file_extension = request.payload['fileExtension']
     file_data_base64 = request.payload['fileData']
-
-    # Decode the Base64 file data
-    file_data_binary = base64.b64decode(file_data_base64)
     
     # Create the document to insert into MongoDB
     file_document = {
         'user_id': ObjectId(user_id),  # Associate the file with the authenticated user
         'file_name': file_name,
         'file_extension': file_extension,
-        'file_content': Binary(file_data_binary),
+        'file_content': file_data_base64,
         'created_on': datetime.utcnow()
     }
 
@@ -116,17 +109,6 @@ def handle_file_upload(request):
 
     
 def list_files(request):
-    # directory = '/Users/shay/Desktop/repo/documentInterrogator/server/app/utilities/docs'  # Folder where files are stored
-    # files = os.listdir(directory)
-    # # Create a numbered list of files
-    # files_list = ' AP'.join(f"{index + 1}. {file}" for index, file in enumerate(files))
-    # return API_Message_Response(files_list)
-
-
-    # if 'user_id' not in request.payload:
-    #     return 'User ID not in the request', 400
-
-    # user_id = request.payload['user_id']
     user_id = request.identity._id
     files = request.collection.find({"user_id": ObjectId(user_id)}, {'file_content': 0})  # Exclude file_content from the results
 
@@ -185,7 +167,6 @@ def handle_embedding_upload(request):
     # Assuming there’s a process to store or associate the embedding with the user (if needed)
     return API_Message_Response(f"Embedding created and associated with the user: {embedding}")
 
-    
 def list_embeddings(request):
     directory = 'chroma_store'  # Folder where files are stored
     embeddings = os.listdir(directory)
@@ -197,12 +178,9 @@ def getDate(request):
     return API_Message_Response(datetime.now())
 
 def makeAnswer(request):
-    # version pre request.idenity._id changes in case it doesnt work
-    # if 'user_id' not in request.payload or 'docName' not in request.payload or 'question' not in request.payload:
-    #     return 'User ID, document name, or question not in the request', 400
-    # user_id = request.payload.get("user_id")
     if 'docName' not in request.payload or 'question' not in request.payload:
         return 'Document name or question not in the request', 400
+    
     # Get the authenticated user's ID from request.identity._id
     user_id = request.identity._id
     # end of changes made
@@ -211,100 +189,19 @@ def makeAnswer(request):
 
     # Get binary file and its extension from DB
     result = request.collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
-
     if not result:
         return API_JSON_Response({"Error": "File not found."}, status=404)
     
-    file_content = result["file_content"]  # Assuming this is a base64 encoded string
-    file_extension = result["file_extension"]  # Retrieve the file extension from the database
+    file_content = base64.b64decode(result["file_content"])  # Assuming this is a base64 encoded data
 
-    temp_file_path = None
-    try:        
-        # Create a temporary file with the appropriate file extension
-        with NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as temp_file:
-            # Write the binary content to the temporary file
-            temp_file.write(file_content)
-            temp_file_path = temp_file.name
-        
-        # Pass the file path and the question to get answer
-        manager = ManagerDriver(temp_file_path, question)
-        answer = manager.make_answer()
+    # Pass the file path and the question to get answer
+    manager = EmbeddingManager(docName, file_content)
+    answer = manager.get_answer(question)
 
-        # Store the question and answer in the history collection
-        store_question_answer(request, question, answer, docName)
-        return API_JSON_Response({"Answer": answer})
-    
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return API_JSON_Response({"Error": str(e)})
+    # Store the question and answer in the history collection
+    store_question_answer(request, question, answer, docName)
+    return API_JSON_Response({"Answer": answer})
 
-    finally:
-        # Ensure the temporary file is deleted after use
-        if temp_file_path and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-
-# def makeAnswer(request):
-#     question = request.payload.get("question")
-#     docName = request.payload.get("docName")
-#     # Get binary file from DB
-#     with MongoDB_Database("files", "file_db") as filedb:
-#         result = filedb.find_one({"file_name": docName})
-    
-#     encoded_data = result["file_content"]
-#     try:
-#         file_binary = base64.b64decode(encoded_data)
-#     except base64.binascii.Error as e:
-#         print("Base64 decoding failed:", str(e))
-#         return API_JSON_Response({"Error": "Failed to decode PDF data from base64."}, status=400)
-
-
-# # # test start
-# # # Create a temporary file to write the binary data
-# #     temp_file = None
-# #     try:
-# #         # Create a temporary file, ensuring it's deleted on close if not explicitly saved
-# #         temp_file = tempfile.NamedTemporaryFile(delete=False)
-# #         temp_file.write(file_binary)
-# #         temp_file_path = temp_file.name
-# #         temp_file.close()  # Make sure to close the file handle to allow other processes to access the file
-# #     except IOError as e:
-# #         print("Failed to write to temporary file:", str(e))
-# #         return API_JSON_Response({"Error": "Failed to write PDF data to a temporary file."}, status=500)
-
-# #     # Check if the temporary file is correctly created
-# #     if not os.path.exists(temp_file_path):
-# #         print("Temporary file does not exist.")
-# #         return API_JSON_Response({"Error": "Temporary PDF file not found after creation."}, status=500)
-
-# #     print("Temporary PDF file created at:", temp_file_path)
-
-# #     # Pass the file and the question to get answer
-# #     manager = ManagerDriver(temp_file_path, question)
-# #     answer = manager.make_answer()
-
-# #     # Clean up: Remove the temporary file after processing
-# #     os.unlink(temp_file_path)  # Use unlink for removing the file
-
-# # # test end
-
-#     # file_binary = base64.b64decode(result["file_content"])
-
-#     # Create a temporary file to write the binary data
-#     # Write binary data to a temporary file
-#     temp_dir = tempfile.mkdtemp()
-#     temp_file_path = os.path.join(temp_dir, docName)
-#     print(temp_file_path)
-#     with open(temp_file_path, 'wb') as file:
-#         file.write(file_binary)
-# # Save the path to use outside the 'with' block
-# #get file from db and save it to temporary directory here , then reference the temporary directory in managerDriver
-#     # TODO - Change manager to take the file binary directy
-#     # rather than loading the file from the os
-    
-#     # Pass the file and the question to get answer
-#     manager = ManagerDriver(temp_file_path,question)
-#     answer = manager.make_answer()
-#     return API_JSON_Response({"Answer": answer})
 
 def getEmbedding(request):
     if 'docName' not in request.payload or 'question' not in request.payload:
