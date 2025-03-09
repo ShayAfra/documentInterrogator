@@ -195,24 +195,17 @@ def makeAnswer(request):
     if not result:
         return API_JSON_Response({"Error": "File not found."}, status=404)
     
-    file_content = result["file_content"]  # Assuming this is a base64 encoded string
+    file_content = result["file_content"].decode('utf-8')  # Assuming this is a binary encoded data
     file_extension = result["file_extension"]  # Retrieve the file extension from the database
 
-    try:        
-        binary_decoded_file_content = base64.b64decode(file_content)
-        decoded_file_content = binary_decoded_file_content.decode('utf-8')
+    # Pass the file path and the question to get answer
+    manager = EmbeddingManager(file_content, file_extension)
+    answer = manager.get_answer(question)
 
-        # Pass the file path and the question to get answer
-        manager = EmbeddingManager(decoded_file_content, file_extension)
-        answer = manager.get_answer(question)
+    # Store the question and answer in the history collection
+    store_question_answer(request, question, answer, docName)
+    return API_JSON_Response({"Answer": answer})
 
-        # Store the question and answer in the history collection
-        store_question_answer(request, question, answer, docName)
-        return API_JSON_Response({"Answer": answer})
-    
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return API_JSON_Response({"Error": str(e)})
 
 def getEmbedding(request):
     if 'docName' not in request.payload or 'question' not in request.payload:
