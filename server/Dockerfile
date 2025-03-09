@@ -1,5 +1,5 @@
 # Server Build
-FROM python:3.9-slim-buster as build
+FROM python:3.10-slim-buster as build
 
 LABEL maintainer="Peter Swanson | pswanson@ucdavis.edu"
 
@@ -17,7 +17,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Final image
-FROM python:3.9-slim-buster
+FROM python:3.10-slim-buster
 
 # Copy required files from build stage
 COPY --from=build /usr/local /usr/local
