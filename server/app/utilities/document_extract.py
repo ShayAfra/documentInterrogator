@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 from dataclasses import dataclass
 from typing import List
 from langchain.docstore.document import Document
-from langchain.document_loaders import PDFPlumberLoader, Docx2txtLoader
-from langchain.chat_models import ChatOpenAI
-from langchain.vectorstores import Chroma
+from langchain_community.document_loaders import PDFPlumberLoader, Docx2txtLoader
+from langchain_community.chat_models import ChatOpenAI
+from langchain_community.vectorstores.chroma import Chroma
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chains import RetrievalQA

@@ -24,10 +24,7 @@ from bson import ObjectId
 #LOOK HERE ITS IMPORTANT
 #shays integrated server side- pre-format matching
 #app
-from flongo_framework.application import Application
-#chatbot
-from openai_client import Chat_Bot_Client
-from openai_client import ROLE
+
 # utils
 from flongo_framework.api.routing.utils import Authentication_Util
 #Routing
@@ -50,17 +47,6 @@ from .utilities.document_extract import ManagerDriver
 
 load_dotenv()  # Load environment variables
 
-# MongoDB setup
-# MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
-# client = MongoClient(MONGO_URI)
-# db = client.your_database_name  # Use your actual database name
-# files_collection = db.files  # Use your actual collection name for storing file data
-client = MongoClient('mongodb://localhost:27017/')
-db = client['file_db']  # Use your preferred DB name
-# Collections
-files_collection = db['files']  # Collection for storing file data
-history_collection = db['history']  # Collection for storing user questions and answers
-embeddings_collection = db['embeddings']  # Collection for storing document embeddings
 #VERY IMPORTANT
 #PLEASE READ
 #SHAYS ROUTE DEFINITONS PRE FORMAT MATCHING
@@ -85,7 +71,7 @@ def delete_file(request):
     file_name = request.payload['file_name']
 
     # Attempt to delete the file that belongs to the authenticated user
-    result = files_collection.find_one_and_delete({"user_id": ObjectId(user_id), "file_name": file_name})
+    result = request.collection.find_one_and_delete({"user_id": ObjectId(user_id), "file_name": file_name})
 
     if result:
         return API_Message_Response(f"File {file_name} deleted successfully")
@@ -121,7 +107,7 @@ def handle_file_upload(request):
     }
 
     # Insert the document into MongoDB
-    result = files_collection.insert_one(file_document)
+    result = request.collection.insert_one(file_document)
 
     if result.inserted_id:
         return {'message': 'File uploaded successfully', 'id': str(result.inserted_id)}, 200
@@ -142,7 +128,7 @@ def list_files(request):
 
     # user_id = request.payload['user_id']
     user_id = request.identity._id
-    files = files_collection.find({"user_id": ObjectId(user_id)}, {'file_content': 0})  # Exclude file_content from the results
+    files = request.collection.find({"user_id": ObjectId(user_id)}, {'file_content': 0})  # Exclude file_content from the results
 
     file_list = [{
         'file_name': file['file_name'],
@@ -162,7 +148,7 @@ def delete_embedding(request):
     file_name_without_extension = os.path.splitext(file_name_with_extension)[0]
 
     # Ensure the embedding belongs to the authenticated user
-    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": file_name_with_extension})
+    file_record = request.collection.find_one({"user_id": ObjectId(user_id), "file_name": file_name_with_extension})
     if not file_record:
         return API_Message_Response(f"Embedding for document {file_name_with_extension} not found or not owned by the user", status_code=404)
 
@@ -188,7 +174,7 @@ def handle_embedding_upload(request):
     file_name_with_extension = request.payload.get("docName")
 
     # Ensure the document belongs to the authenticated user before proceeding
-    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": file_name_with_extension})
+    file_record = request.collection.find_one({"user_id": ObjectId(user_id), "file_name": file_name_with_extension})
     if not file_record:
         return API_Message_Response(f"Document {file_name_with_extension} not found or not owned by the user", status_code=404)
 
@@ -224,7 +210,7 @@ def makeAnswer(request):
     docName = request.payload.get("docName")
 
     # Get binary file and its extension from DB
-    result = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
+    result = request.collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
 
     if not result:
         return API_JSON_Response({"Error": "File not found."}, status=404)
@@ -330,7 +316,7 @@ def getEmbedding(request):
     question = request.payload.get("question")
 
     # Ensure the document belongs to the authenticated user before processing
-    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
+    file_record = request.collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
     if not file_record:
         return API_Message_Response(f"Document {docName} not found or not owned by the user", status_code=404)
 
@@ -351,7 +337,7 @@ def makeEmbedding(request):
     question = request.payload.get("question")
 
     # Ensure the document belongs to the authenticated user before processing
-    file_record = files_collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
+    file_record = request.collection.find_one({"user_id": ObjectId(user_id), "file_name": docName})
     if not file_record:
         return API_Message_Response(f"Document {docName} not found or not owned by the user", status_code=404)
 
@@ -373,8 +359,10 @@ def store_question_answer(request, question, answer, doc_name):
         'doc_name': doc_name,
         'created_on': datetime.utcnow()
     }
-    # Insert the document into the history collection
-    history_collection.insert_one(history_document)
+
+    with MongoDB_Database('history') as history_collection:
+        # Insert the document into the history collection
+        history_collection.insert_one(history_document)
 
 def store_embedding(request, doc_name, embedding):
     user_id = request.identity._id
@@ -384,14 +372,16 @@ def store_embedding(request, doc_name, embedding):
         'embedding': embedding,
         'created_on': datetime.utcnow()
     }
-    # Insert the document into the embeddings collection
-    embeddings_collection.insert_one(embedding_document)
+
+    with MongoDB_Database('embeddings') as embeddings_collection:
+        # Insert the document into the embeddings collection
+        embeddings_collection.insert_one(embedding_document)
 
 def get_user_history(request):
     user_id = request.identity._id
 
     # Retrieve all history entries for the authenticated user
-    history_entries = history_collection.find({"user_id": ObjectId(user_id)})
+    history_entries = request.collection.find({"user_id": ObjectId(user_id)})
 
     history_list = [{
         'question': entry['question'],
@@ -406,7 +396,7 @@ def get_user_embeddings(request):
     user_id = request.identity._id
 
     # Retrieve all embeddings for the authenticated user
-    embeddings = embeddings_collection.find({"user_id": ObjectId(user_id)})
+    embeddings = request.collection.find({"user_id": ObjectId(user_id)})
 
     embeddings_list = [{
         'doc_name': entry['doc_name'],
@@ -507,7 +497,8 @@ APP_ROUTES = App_Routes(
         permissions=Route_Permissions(GET='user', POST='user'),
 
         # permissions=Route_Permissions(POST='user'),
-        log_level= LOG_LEVELS.DEBUG
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="files"
     ),
     Route(
         url = '/delete-file',
@@ -515,7 +506,8 @@ APP_ROUTES = App_Routes(
             DELETE= delete_file
         ),
         permissions=Route_Permissions(POST='user'),
-        log_level= LOG_LEVELS.DEBUG
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="files"
     ),
     Route(
         url = '/embedding',
@@ -524,7 +516,8 @@ APP_ROUTES = App_Routes(
             GET= list_embeddings
         ),
         permissions=Route_Permissions(POST='user'),
-        log_level= LOG_LEVELS.DEBUG
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="files"
     ),
     Route(
         url = '/delete-embedding',
@@ -532,7 +525,8 @@ APP_ROUTES = App_Routes(
             DELETE= delete_embedding
         ),
         permissions=Route_Permissions(POST='user'),
-        log_level= LOG_LEVELS.DEBUG
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="files"
     ),
     Route(
         url = '/currentTime',
@@ -567,21 +561,24 @@ APP_ROUTES = App_Routes(
 
         ),
         permissions=Route_Permissions(POST='user'),
-        log_level= LOG_LEVELS.DEBUG
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="files"
     ),
     Route(
         url = '/getEmbedding',
         handler=Route_Handler(
             GET= getEmbedding
         ),
-        log_level= LOG_LEVELS.DEBUG
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="files"
     ),
         Route(
         url = '/makeEmbedding',
         handler=Route_Handler(
             GET= makeEmbedding
         ),
-        log_level= LOG_LEVELS.DEBUG
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="files"
     ),
      # Route to get user history
     Route(
@@ -590,7 +587,8 @@ APP_ROUTES = App_Routes(
             GET=get_user_history
         ),
         permissions=Route_Permissions(GET='user'),
-        log_level=LOG_LEVELS.DEBUG
+        log_level=LOG_LEVELS.DEBUG,
+        collection_name="history"
     ),
 
     # Route to get user embeddings
@@ -600,6 +598,7 @@ APP_ROUTES = App_Routes(
             GET=get_user_embeddings
         ),
         permissions=Route_Permissions(GET='user'),
-        log_level=LOG_LEVELS.DEBUG
+        log_level=LOG_LEVELS.DEBUG,
+        collection_name="embeddings"
     ),
 )
