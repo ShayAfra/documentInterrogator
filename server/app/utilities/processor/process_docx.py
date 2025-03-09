@@ -5,9 +5,11 @@ import xml.etree.ElementTree as ET
 import zipfile
 import os
 import io
+from langchain_core.documents import Document
 
 class DocxProcessor:
-    def __init__(self, file_contents, img_dir=None):
+    def __init__(self, file_name, file_contents, img_dir=None):
+        self.file_name = file_name
         self.file_contents = file_contents
         self.img_dir = img_dir
 
@@ -73,4 +75,11 @@ class DocxProcessor:
                 text += self.xml2text(zipf.read(fname))
 
         zipf.close()
-        return text.strip()
+        return [
+            Document(
+                text.strip(),
+                metadata={
+                    "source": self.file_name
+                }
+            )
+        ]

@@ -89,16 +89,13 @@ def handle_file_upload(request):
     file_name = request.payload['fileName']
     file_extension = request.payload['fileExtension']
     file_data_base64 = request.payload['fileData']
-
-    # Decode the Base64 file data
-    file_data_binary = base64.b64decode(file_data_base64)
     
     # Create the document to insert into MongoDB
     file_document = {
         'user_id': ObjectId(user_id),  # Associate the file with the authenticated user
         'file_name': file_name,
         'file_extension': file_extension,
-        'file_content': Binary(file_data_binary),
+        'file_content': file_data_base64,
         'created_on': datetime.utcnow()
     }
 
@@ -195,11 +192,10 @@ def makeAnswer(request):
     if not result:
         return API_JSON_Response({"Error": "File not found."}, status=404)
     
-    file_content = result["file_content"].decode('utf-8')  # Assuming this is a binary encoded data
-    file_extension = result["file_extension"]  # Retrieve the file extension from the database
+    file_content = base64.b64decode(result["file_content"])  # Assuming this is a base64 encoded data
 
     # Pass the file path and the question to get answer
-    manager = EmbeddingManager(file_content, file_extension)
+    manager = EmbeddingManager(docName, file_content)
     answer = manager.get_answer(question)
 
     # Store the question and answer in the history collection
