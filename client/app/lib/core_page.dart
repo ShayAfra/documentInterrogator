@@ -96,7 +96,7 @@ class _CorePageState extends State<CorePage> {
       onSuccess: (response) {
         print('Question sent successfully: ${response.body}');
         setState(() {
-          returnedAnswer = jsonDecode(response.body)['Answer'][0];
+          returnedAnswer = jsonDecode(response.body)['Answer'];
         });
       },
       onError: (response) {
