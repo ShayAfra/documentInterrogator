@@ -1,4 +1,7 @@
-import 'package:app/theme.dart';
+import 'package:app/theme/colors.dart';
+import 'package:app/theme/spacing.dart';
+import 'package:app/theme/typography.dart';
+import 'package:app/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -26,14 +29,14 @@ class SignUpForm extends StatelessWidget {
         key: _formKey,
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(AppSpacing.spacingL),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (errorMessage != null) 
                   ...[
-                    Text(errorMessage!, style: const TextStyle(color: Colors.red)),
-                    const SizedBox(height: 30),
+                    Text(errorMessage!, style: AppTypography.labelLarge.copyWith(color: AppColors.clrError)),
+                    const SizedBox(height: AppSpacing.spacingXL - AppSpacing.spacingS),
                   ],
                 SvgPicture.asset('assets/images/logo_growing.svg', width: 100, height: 100),
                 TextFormField(
@@ -48,7 +51,7 @@ class SignUpForm extends StatelessWidget {
                         decoration: const InputDecoration(labelText: 'First Name'),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppSpacing.spacingS + AppSpacing.spacingXS),
                     Expanded(
                       child: TextFormField(
                         controller: _lastNameController,
@@ -66,7 +69,7 @@ class SignUpForm extends StatelessWidget {
                   decoration: const InputDecoration(labelText: 'Password'),
                   obscureText: true,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.spacingL + AppSpacing.spacingS),
                 ElevatedButton(
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
@@ -80,10 +83,14 @@ class SignUpForm extends StatelessWidget {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accentTextColor,
-                    minimumSize: const Size(200, 65)
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    minimumSize: const Size(200, 65),
+                    textStyle: Theme.of(context).textTheme.labelLarge,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
                   ),
-                  child: const Text('Sign Up'),
+                  child: Text('Sign Up', style: Theme.of(context).textTheme.labelLarge),
                 ),
               ],
             ),

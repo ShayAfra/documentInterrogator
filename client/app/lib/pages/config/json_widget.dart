@@ -2,6 +2,10 @@
 import 'package:flongo_client/widgets/json_list_widget.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:app/theme/colors.dart';
+import 'package:app/theme/spacing.dart';
+import 'package:app/theme/typography.dart';
+import 'package:app/theme/app_theme.dart';
 
 class ConfigJSONWidget extends JSON_List_Widget {
   const ConfigJSONWidget({Key? key, required data, required apiURL, onRefresh}) : super(
@@ -33,12 +37,13 @@ class _ConfigJSONWidgetState extends JSONWidgetState {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.all(AppSpacing.spacingS),
           child: TextField(
             onChanged: filterData,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Search',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              labelStyle: Theme.of(context).textTheme.labelLarge,
             ),
           ),
         ),
@@ -61,18 +66,18 @@ class _ConfigJSONWidgetState extends JSONWidgetState {
             itemBuilder: (BuildContext context, int index) {
               var item = data[index];
               return ListTile(
-                leading: const Icon(Icons.settings),
-                title: Text(item['name'] ?? ''),
-                subtitle: Text('${item['value']}'),
+                leading: Icon(Icons.settings, color: Theme.of(context).iconTheme.color),
+                title: Text(item['name'] ?? '', style: Theme.of(context).textTheme.bodyMedium),
+                subtitle: Text('${item['value']}', style: Theme.of(context).textTheme.labelLarge),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.edit),
+                      icon: Icon(Icons.edit, color: Theme.of(context).colorScheme.primary),
                       onPressed: () => updateItem(item, index),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete),
+                      icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
                       onPressed: () => deleteItem(item, index),
                     ),
                   ],

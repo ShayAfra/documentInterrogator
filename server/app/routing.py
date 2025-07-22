@@ -281,6 +281,7 @@ def get_user_history(request):
     history_entries = request.collection.find({"user_id": ObjectId(user_id)})
 
     history_list = [{
+        '_id': str(entry['_id']),  # Include the entry ID for frontend reference
         'question': entry['question'],
         'answer': entry['answer'],
         'doc_name': entry['doc_name'],
@@ -304,10 +305,19 @@ def get_user_embeddings(request):
     return API_JSON_Response({"embeddings": embeddings_list})
 
 
-
-
-
-
+def delete_history_entry(request):
+    user_id = request.identity._id
+    entry_id = request.payload.get('entry_id')
+    try:
+        obj_id = ObjectId(entry_id)
+    except Exception:
+        return API_Message_Response("Invalid history entry id.", status_code=400)
+    with MongoDB_Database('history') as history_collection:
+        result = history_collection.delete_one({"_id": obj_id, "user_id": ObjectId(user_id)})
+        if result.deleted_count == 1:
+            return API_Message_Response("History entry deleted successfully.")
+        else:
+            return API_Message_Response("History entry not found or not owned by user.", status_code=404)
 
 
 
@@ -330,6 +340,17 @@ APP_ROUTES = App_Routes(
         collection_name='users',
         request_schema=AUTHENTICATION_ROUTE_REQUEST_SCHEMA,
         response_transformer=AUTHENTICATION_ROUTE_RESPONSE_TRANSFORMER,
+        log_level=LOG_LEVELS.DEBUG
+    ),
+
+    # Delete individual history entry
+    Route(
+        url='/history',
+        handler=Route_Handler(
+            POST=delete_history_entry
+        ),
+        permissions=Route_Permissions(POST='user'),
+        collection_name='history',
         log_level=LOG_LEVELS.DEBUG
     ),
 

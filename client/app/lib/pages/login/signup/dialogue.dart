@@ -84,19 +84,19 @@ class _SignUpDialogState extends State<SignUpDialog> {
       onSuccess: (response) {
         if (response.statusCode == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Confirmation email resent to $_submittedEmail')),
+            SnackBar(content: Text('Confirmation email resent to $_submittedEmail', style: Theme.of(context).textTheme.bodyMedium)),
           );
         } else {
           // Handle non-200 response
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to resend confirmation email')),
+            SnackBar(content: Text('Failed to resend confirmation email', style: Theme.of(context).textTheme.bodyMedium)),
           );
         }
       },
       onError: (response) {
         // Handle error response
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error in resending confirmation email')),
+          SnackBar(content: Text('Error in resending confirmation email', style: Theme.of(context).textTheme.bodyMedium)),
         );
       },
     );

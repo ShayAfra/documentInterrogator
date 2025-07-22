@@ -1,8 +1,11 @@
-
 import 'package:flongo_client/pages/base_page.dart';
 import 'package:flongo_client/utilities/http_client.dart';
 import 'package:flongo_client/widgets/navbar/app_navbar.dart';
 import 'package:flutter/material.dart';
+import 'package:app/theme/colors.dart';
+import 'package:app/theme/spacing.dart';
+import 'package:app/theme/typography.dart';
+import 'package:app/theme/app_theme.dart';
 
 import '../../navbar.dart';
 
