@@ -10,7 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../navbar.dart';
-import '../../theme.dart';
+import '../../widgets/shared_navbar.dart';
+import '../../theme/colors.dart';
+import '../../theme/spacing.dart';
+import '../../theme/typography.dart';
+import '../../theme/app_theme.dart';
 
 class LoginPage extends API_Page {
   @override
@@ -20,23 +24,26 @@ class LoginPage extends API_Page {
 
   final String homeURL;
 
-  LoginPage({super.key, this.homeURL='/home'});
+  LoginPage({super.key, this.homeURL = '/home'});
 
   @override
   _LoginPageState createState() => _LoginPageState();
 }
 
-class _LoginPageState extends API_PageState<LoginPage> with TickerProviderStateMixin {
+class _LoginPageState extends API_PageState<LoginPage>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  late AnimationController _logoAnimationController = AnimationController(vsync: this);
+  late AnimationController _logoAnimationController =
+      AnimationController(vsync: this);
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _logoAnimationController = AnimationController(vsync: this, duration: const Duration(seconds: 2));
+    _logoAnimationController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 2));
   }
 
   @override
@@ -49,95 +56,171 @@ class _LoginPageState extends API_PageState<LoginPage> with TickerProviderStateM
 
   void _onLoginSuccess() {
     _logoAnimationController.forward().then((_) {
-      Navigator.pushNamed(
-        context,
-        widget.homeURL,
-        arguments: {"_animation": FadeToBlackTransition.transitionsBuilder, "_animation_duration": 600}
-      );
+      Navigator.pushNamed(context, widget.homeURL, arguments: {
+        "_animation": FadeToBlackTransition.transitionsBuilder,
+        "_animation_duration": 600
+      });
     });
   }
 
   @override
-  Widget getPageWidget(BuildContext context) {
-    return ScrollConfiguration(
-      behavior: MouseScrollBehavior(),
-      child: SingleChildScrollView(
-        child:Padding(
-          padding: EdgeInsets.symmetric(vertical: 0.0, horizontal: MediaQuery.of(context).size.width * 0.1),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                if (_errorMessage != null) ...[
-                  Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
-                  const SizedBox(height: 16.0),
-                ],
-                const SizedBox(height: 16.0),
-                Lottie.asset(
-                  'assets/animations/logo_animation.json',
-                  controller: _logoAnimationController,
-                  height: 240, 
-                  width: 240,
-                  animate: false,
-                ),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Username'),
-                  validator: (value) => value!.isEmpty ? 'Username required' : null,
-                ),
-                const SizedBox(height: 16.0),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Password'),
-                  obscureText: true,
-                  validator: (value) => value!.isEmpty ? 'Password required' : null,
-                ),
-                const SizedBox(height: 50.0),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: const SharedNavBar(),
+      body: ScrollConfiguration(
+        behavior: MouseScrollBehavior(),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 0.0,
+              horizontal: MediaQuery.of(context).size.width * 0.1,
+            ),
+            child: Form(
+              key: _formKey,
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height -
+                    kToolbarHeight -
+                    48, // subtract navbar and a bit more
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        HTTPClient(widget.apiURL).login(
-                          _usernameController.text,
-                          _passwordController.text,
-                          (response) => _onLoginSuccess(),
-                          (response) => setState(() {
-                            if (response != null && response.body != null) {
-                              _errorMessage = jsonDecode(response.body)['error'];
-                            } else {
-                              _errorMessage = 'Failed to authenticate!';
-                            }
-                          })
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentTextColor,
-                      minimumSize: const Size(200, 65)
+                    if (_errorMessage != null) ...[
+                      Text(_errorMessage!,
+                          style: AppTypography.labelLarge
+                              .copyWith(color: AppColors.clrError)),
+                      const SizedBox(height: AppSpacing.spacingM),
+                    ],
+                    Center(
+                      child: SizedBox(
+                        child: Container(
+                          padding: const EdgeInsets.all(AppSpacing.spacingXL),
+                          decoration: BoxDecoration(
+                            color: AppColors.clrDarkA2,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.18),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          constraints: const BoxConstraints(
+                            maxWidth: 420,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Lottie.asset(
+                                'assets/animations/logo_animation.json',
+                                controller: _logoAnimationController,
+                                height: 200,
+                                width: 200,
+                                animate: false,
+                              ),
+                              const SizedBox(height: AppSpacing.spacingL),
+                              TextFormField(
+                                controller: _usernameController,
+                                decoration: const InputDecoration(
+                                    labelText: 'Username'),
+                                validator: (value) =>
+                                    value!.isEmpty ? 'Username required' : null,
+                              ),
+                              const SizedBox(height: AppSpacing.spacingM),
+                              TextFormField(
+                                controller: _passwordController,
+                                decoration: const InputDecoration(
+                                    labelText: 'Password'),
+                                obscureText: true,
+                                validator: (value) =>
+                                    value!.isEmpty ? 'Password required' : null,
+                              ),
+                              const SizedBox(height: AppSpacing.spacingXL),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        if (_formKey.currentState!.validate()) {
+                                          HTTPClient(widget.apiURL).login(
+                                              _usernameController.text,
+                                              _passwordController.text,
+                                              (response) => _onLoginSuccess(),
+                                              (response) => setState(() {
+                                                    if (response != null &&
+                                                        response.body != null) {
+                                                      _errorMessage =
+                                                          jsonDecode(response
+                                                              .body)['error'];
+                                                    } else {
+                                                      _errorMessage =
+                                                          'Failed to authenticate!';
+                                                    }
+                                                  }));
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        foregroundColor: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                        minimumSize: const Size(120, 56),
+                                        textStyle: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12)),
+                                        elevation: 2,
+                                      ),
+                                      child: const Text('Login'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.spacingL),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: () => showDialog(
+                                        context: context,
+                                        builder: (context) =>
+                                            const SignUpDialog(),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        foregroundColor: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                        minimumSize: const Size(120, 56),
+                                        textStyle: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12)),
+                                        elevation: 2,
+                                      ),
+                                      child: const Text('Sign Up'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    child: const Text('Login'),
-                  ),
-                    ElevatedButton(
-                      onPressed: () => showDialog(
-                        context: context,
-                        builder: (context) => const SignUpDialog(),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.accentTextColor,
-                        minimumSize: const Size(200, 65)
-                      ),
-                      child: const Text('Sign Up'),
-                    )
-                ],
-              )],
+                  ],
+                ),
+              ),
             ),
           ),
-        )
-      )
+        ),
+      ),
     );
   }
 }

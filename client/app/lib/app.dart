@@ -4,7 +4,7 @@ import 'package:app/pages/login/page.dart';
 import 'package:app/pages/splash/page.dart';
 import 'package:app/pages/user/page.dart';
 import 'package:app/pages/users/page.dart';
-import 'package:app/theme.dart';
+import 'package:app/theme/app_theme.dart';
 import 'core_page.dart';
 import 'package:flongo_client/app.dart';
 import 'package:flongo_client/app_router.dart';
@@ -22,5 +22,5 @@ final FlongoApp flongoApp = FlongoApp(
     },
   ),
   initialRoute: '/_splash',
-  appTheme: ThemeData(primarySwatch: AppTheme.primarySwatch),
+  appTheme: darkTheme,
 );
