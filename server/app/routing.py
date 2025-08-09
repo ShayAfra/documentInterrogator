@@ -38,7 +38,7 @@ from bson import Binary
 from dotenv import load_dotenv
 from datetime import datetime
 from .utilities.extract_v2 import EmbeddingManager
-from .utilities.document_extract import ManagerDriver
+from .utilities.document_extract import ManagerDriver, WikipediaManager, AnswerRetreival
 
 
 load_dotenv()  # Load environment variables
@@ -200,6 +200,35 @@ def makeAnswer(request):
 
     # Store the question and answer in the history collection
     store_question_answer(request, question, answer, docName)
+    return API_JSON_Response({"Answer": answer})
+
+
+def makeWikiAnswer(request):
+    # Accept either 'title' or reuse 'docName' as the wiki article title
+    title = request.payload.get('title') or request.payload.get('docName')
+    question = request.payload.get('question')
+    if not title or not question:
+        return API_Message_Response("Missing 'title' (or 'docName') or 'question' in request.", status_code=400)
+
+    # Build the Wikipedia QA pipeline
+    wiki_manager = WikipediaManager(title)
+    wiki_manager.get_retrieval_questions_for_document()
+    if not wiki_manager.get_retrieval_qas():
+        return API_JSON_Response({"Error": "Could not retrieve Wikipedia content for the given title."}, status=404)
+
+    answer_list = AnswerRetreival(wiki_manager).get_answers(question)
+    # get_answers returns a list; pick the first non-empty answer
+    answer = next((a for a in answer_list if a), None)
+    if not answer:
+        return API_JSON_Response({"Error": "No answer could be generated."}, status=500)
+
+    # Optionally store in history with a wiki prefix
+    try:
+        store_question_answer(request, question, answer, f"wiki:{title}")
+    except Exception:
+        # History storage is best-effort; do not fail the request on error
+        pass
+
     return API_JSON_Response({"Answer": answer})
 
 
@@ -481,6 +510,15 @@ APP_ROUTES = App_Routes(
         permissions=Route_Permissions(POST='user'),
         log_level= LOG_LEVELS.DEBUG,
         collection_name="files"
+    ),
+    Route(
+        url = '/wikiAnswer',
+        handler=Route_Handler(
+            POST= makeWikiAnswer
+        ),
+        permissions=Route_Permissions(POST='user'),
+        log_level= LOG_LEVELS.DEBUG,
+        collection_name="history"
     ),
     Route(
         url = '/getEmbedding',

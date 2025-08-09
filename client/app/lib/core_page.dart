@@ -6,6 +6,7 @@ import 'package:app/theme/app_theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flongo_client/utilities/http_client.dart';
+import 'package:app/utils/api_error.dart';
 import 'package:flongo_client/pages/api_page.dart';
 import 'package:flongo_client/widgets/navbar/app_navbar.dart';
 import 'dart:typed_data';
@@ -51,12 +52,12 @@ class _CorePageState extends API_PageState<CorePage> {
           historyItems = history.cast<Map<String, dynamic>>();
         });
       },
-      onError: (response) {
+      onError: (response) => handleApiError(context, response, () {
         print('Failed to fetch history: \\${response.toString()}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to fetch history.', style: Theme.of(context).textTheme.bodyMedium)),
         );
-      }
+      })
     );
   }
   String? selectedFile;
@@ -94,12 +95,12 @@ class _CorePageState extends API_PageState<CorePage> {
             SnackBar(content: Text('File uploaded successfully!', style: Theme.of(context).textTheme.bodyMedium)),
           );
         },
-        onError: (response) {
-          print('Failed to upload file: ${response.statusCode}');
+        onError: (response) => handleApiError(context, response, () {
+          print('Failed to upload file: \\${response.statusCode}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to upload file.', style: Theme.of(context).textTheme.bodyMedium)),
           );
-        });
+        }));
 
     // Removed user_id from the body since it's handled on the server-side
     // var response = await http.post(url,
@@ -140,12 +141,12 @@ class _CorePageState extends API_PageState<CorePage> {
             returnedAnswer = jsonDecode(response.body)['Answer'];
           });
         },
-        onError: (response) {
-          print('Failed to send question: ${response.statusCode}');
+        onError: (response) => handleApiError(context, response, () {
+          print('Failed to send question: \\${response.statusCode}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to send question.', style: Theme.of(context).textTheme.bodyMedium)),
           );
-        }
+        })
       );
     } else {
       // Wikipedia Article tab
@@ -155,24 +156,47 @@ class _CorePageState extends API_PageState<CorePage> {
         );
         return;
       }
-      HTTPClient("/getAnswer").post(
+      HTTPClient("/wikiAnswer").post(
         body: {
-          'docName': _wikiTitleInput,
+          'title': _wikiTitleInput,
           'question': currentQuestion,
-          'wiki': true, // Optional: signal backend this is a wiki request
         },
         onSuccess: (response) {
           print('Wiki question sent successfully: ${response.body}');
-          setState(() {
-            returnedAnswer = jsonDecode(response.body)['Answer'];
-          });
+          try {
+            final decoded = jsonDecode(response.body);
+            String? answer;
+            if (decoded is List && decoded.isNotEmpty) {
+              final first = decoded.first;
+              if (first is Map && first['Answer'] is String) {
+                answer = first['Answer'] as String;
+              }
+            } else if (decoded is Map && decoded['Answer'] is String) {
+              answer = decoded['Answer'] as String;
+            }
+            if (answer != null) {
+              setState(() {
+                returnedAnswer = answer;
+              });
+            } else {
+              print('Unexpected wikiAnswer response format: ${response.body}');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Unexpected response format from server.', style: Theme.of(context).textTheme.bodyMedium)),
+              );
+            }
+          } catch (e) {
+            print('Failed to parse wikiAnswer response: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to parse server response.', style: Theme.of(context).textTheme.bodyMedium)),
+            );
+          }
         },
-        onError: (response) {
-          print('Failed to send wiki question: ${response.statusCode}');
+        onError: (response) => handleApiError(context, response, () {
+          print('Failed to send wiki question: \\${response.statusCode}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to send Wikipedia question.', style: Theme.of(context).textTheme.bodyMedium)),
           );
-        }
+        })
       );
     }
   }
@@ -190,12 +214,12 @@ class _CorePageState extends API_PageState<CorePage> {
         });
       },
       // Function that runs on API 
-      onError: (response) {
-        print('Failed to fetch files: ${response.toString()}');
+      onError: (response) => handleApiError(context, response, () {
+        print('Failed to fetch files: \\${response.toString()}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to fetch files.', style: Theme.of(context).textTheme.bodyMedium)),
         );
-      } 
+      }) 
     );
 
   }
@@ -288,11 +312,11 @@ class _CorePageState extends API_PageState<CorePage> {
                         SnackBar(content: Text('History entry deleted.', style: Theme.of(context).textTheme.bodyMedium)),
                       );
                     },
-                    onError: (response) {
+                    onError: (response) => handleApiError(context, response, () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Failed to delete history entry.', style: Theme.of(context).textTheme.bodyMedium)),
                       );
-                    },
+                    }),
                   );
                 },
               ),

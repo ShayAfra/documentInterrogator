@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:app/pages/login/signup/confirmation.dart';
 import 'package:app/pages/login/signup/form.dart';
 import 'package:flongo_client/utilities/http_client.dart';
+import 'package:app/utils/api_error.dart';
 import 'package:flutter/material.dart';
 
 class SignUpDialog extends StatefulWidget {
@@ -35,12 +36,14 @@ class _SignUpDialogState extends State<SignUpDialog> {
         });
         _checkEmailConfirmation();
       },
-      onError: (response) => setState(() {
-        if (response != null && response.body != null) {
-          _errorMessage = jsonDecode(response.body)['error'];
-        } else {
-          _errorMessage = 'Failed to create user';
-        }
+      onError: (response) => handleApiError(context, response, () {
+        setState(() {
+          if (response != null && response.body != null) {
+            _errorMessage = jsonDecode(response.body)['error'];
+          } else {
+            _errorMessage = 'Failed to create user';
+          }
+        });
       })
     );
   }
@@ -69,7 +72,9 @@ class _SignUpDialogState extends State<SignUpDialog> {
         },
         onError: (response) {
           timer.cancel(); // Stop polling on error
-          // Handle error response
+          handleApiError(context, response, () {
+            // Handle error response
+          });
         }
       );
     });
@@ -93,12 +98,12 @@ class _SignUpDialogState extends State<SignUpDialog> {
           );
         }
       },
-      onError: (response) {
+      onError: (response) => handleApiError(context, response, () {
         // Handle error response
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error in resending confirmation email', style: Theme.of(context).textTheme.bodyMedium)),
         );
-      },
+      }),
     );
   }
 

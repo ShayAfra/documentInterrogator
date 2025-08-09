@@ -4,6 +4,7 @@ import 'package:app/pages/login/signup/dialogue.dart';
 import 'package:app/utils/scroll_behavior.dart';
 import 'package:flongo_client/pages/api_page.dart';
 import 'package:flongo_client/utilities/http_client.dart';
+import 'package:app/utils/api_error.dart';
 import 'package:flongo_client/utilities/transitions/fade_to_black_transition.dart';
 import 'package:flongo_client/widgets/navbar/app_navbar.dart';
 import 'package:flutter/material.dart';
@@ -148,16 +149,18 @@ class _LoginPageState extends API_PageState<LoginPage>
                                               _usernameController.text,
                                               _passwordController.text,
                                               (response) => _onLoginSuccess(),
-                                              (response) => setState(() {
-                                                    if (response != null &&
-                                                        response.body != null) {
-                                                      _errorMessage =
-                                                          jsonDecode(response
-                                                              .body)['error'];
-                                                    } else {
-                                                      _errorMessage =
-                                                          'Failed to authenticate!';
-                                                    }
+                                              (response) => handleApiError(context, response, () {
+                                                    setState(() {
+                                                      if (response != null &&
+                                                          response.body != null) {
+                                                        _errorMessage =
+                                                            jsonDecode(response
+                                                                .body)['error'];
+                                                      } else {
+                                                        _errorMessage =
+                                                            'Failed to authenticate!';
+                                                      }
+                                                    });
                                                   }));
                                         }
                                       },
