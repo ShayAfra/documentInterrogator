@@ -545,6 +545,12 @@ class _CorePageState extends API_PageState<CorePage> {
             child: TextField(
               controller: questionController,
               onChanged: (text) => setState(() => currentQuestion = text),
+              onSubmitted: (text) {
+                final isInputValid = _tabIndex == 0
+                  ? (selectedFile != null && selectedFile!.isNotEmpty && (currentQuestion != null && currentQuestion!.isNotEmpty))
+                  : (_wikiTitleInput != null && _wikiTitleInput!.isNotEmpty && (currentQuestion != null && currentQuestion!.isNotEmpty));
+                if (isInputValid) sendQuestion();
+              },
               decoration: InputDecoration(
                 labelText: 'Enter your question',
                 border: const OutlineInputBorder(),

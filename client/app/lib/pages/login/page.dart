@@ -33,6 +33,25 @@ class LoginPage extends API_Page {
 
 class _LoginPageState extends API_PageState<LoginPage>
     with TickerProviderStateMixin {
+  void _submitLogin() {
+    if (_formKey.currentState!.validate()) {
+      HTTPClient(widget.apiURL).login(
+        _usernameController.text,
+        _passwordController.text,
+        (response) => _onLoginSuccess(),
+        (response) => handleApiError(context, response, () {
+          setState(() {
+            if (response != null && response.body != null) {
+              _errorMessage = jsonDecode(response.body)['error'];
+            } else {
+              _errorMessage = 'Failed to authenticate!';
+            }
+          });
+        }),
+      );
+    }
+  }
+
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -126,6 +145,7 @@ class _LoginPageState extends API_PageState<LoginPage>
                                     labelText: 'Username'),
                                 validator: (value) =>
                                     value!.isEmpty ? 'Username required' : null,
+                                onFieldSubmitted: (_) => _submitLogin(),
                               ),
                               const SizedBox(height: AppSpacing.spacingM),
                               TextFormField(
@@ -135,6 +155,7 @@ class _LoginPageState extends API_PageState<LoginPage>
                                 obscureText: true,
                                 validator: (value) =>
                                     value!.isEmpty ? 'Password required' : null,
+                                onFieldSubmitted: (_) => _submitLogin(),
                               ),
                               const SizedBox(height: AppSpacing.spacingXL),
                               Row(
