@@ -4,6 +4,7 @@ import 'package:app/pages/login/signup/dialogue.dart';
 import 'package:app/utils/scroll_behavior.dart';
 import 'package:flongo_client/pages/api_page.dart';
 import 'package:flongo_client/utilities/http_client.dart';
+import 'package:app/utils/api_error.dart';
 import 'package:flongo_client/utilities/transitions/fade_to_black_transition.dart';
 import 'package:flongo_client/widgets/navbar/app_navbar.dart';
 import 'package:flutter/material.dart';
@@ -32,6 +33,25 @@ class LoginPage extends API_Page {
 
 class _LoginPageState extends API_PageState<LoginPage>
     with TickerProviderStateMixin {
+  void _submitLogin() {
+    if (_formKey.currentState!.validate()) {
+      HTTPClient(widget.apiURL).login(
+        _usernameController.text,
+        _passwordController.text,
+        (response) => _onLoginSuccess(),
+        (response) => handleApiError(context, response, () {
+          setState(() {
+            if (response != null && response.body != null) {
+              _errorMessage = jsonDecode(response.body)['error'];
+            } else {
+              _errorMessage = 'Failed to authenticate!';
+            }
+          });
+        }),
+      );
+    }
+  }
+
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -125,6 +145,7 @@ class _LoginPageState extends API_PageState<LoginPage>
                                     labelText: 'Username'),
                                 validator: (value) =>
                                     value!.isEmpty ? 'Username required' : null,
+                                onFieldSubmitted: (_) => _submitLogin(),
                               ),
                               const SizedBox(height: AppSpacing.spacingM),
                               TextFormField(
@@ -134,6 +155,7 @@ class _LoginPageState extends API_PageState<LoginPage>
                                 obscureText: true,
                                 validator: (value) =>
                                     value!.isEmpty ? 'Password required' : null,
+                                onFieldSubmitted: (_) => _submitLogin(),
                               ),
                               const SizedBox(height: AppSpacing.spacingXL),
                               Row(
@@ -148,16 +170,18 @@ class _LoginPageState extends API_PageState<LoginPage>
                                               _usernameController.text,
                                               _passwordController.text,
                                               (response) => _onLoginSuccess(),
-                                              (response) => setState(() {
-                                                    if (response != null &&
-                                                        response.body != null) {
-                                                      _errorMessage =
-                                                          jsonDecode(response
-                                                              .body)['error'];
-                                                    } else {
-                                                      _errorMessage =
-                                                          'Failed to authenticate!';
-                                                    }
+                                              (response) => handleApiError(context, response, () {
+                                                    setState(() {
+                                                      if (response != null &&
+                                                          response.body != null) {
+                                                        _errorMessage =
+                                                            jsonDecode(response
+                                                                .body)['error'];
+                                                      } else {
+                                                        _errorMessage =
+                                                            'Failed to authenticate!';
+                                                      }
+                                                    });
                                                   }));
                                         }
                                       },
