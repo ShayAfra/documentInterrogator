@@ -59,20 +59,18 @@ def handle_get(request):
     return API_Message_Response(file_path)
 
 def delete_file(request):
-    if 'file_name' not in request.payload:
-        return 'File name not in the request', 400
+    # Accept both file_name and fileName for compatibility
+    file_name = request.payload.get('file_name') or request.payload.get('fileName')
+    if not file_name:
+        return API_JSON_Response({"error": "File name not in the request"}, status_code=400)
 
-    # Get the authenticated user's ID from request.identity._id
     user_id = request.identity._id
-    file_name = request.payload['file_name']
-
-    # Attempt to delete the file that belongs to the authenticated user
     result = request.collection.find_one_and_delete({"user_id": ObjectId(user_id), "file_name": file_name})
 
     if result:
-        return API_Message_Response(f"File {file_name} deleted successfully")
+        return API_JSON_Response({"message": f"File {file_name} deleted successfully"}, status_code=200)
     else:
-        return API_Message_Response(f"File {file_name} not found or not owned by the user", status_code=404)
+        return API_JSON_Response({"error": f"File {file_name} not found or not owned by the user"}, status_code=404)
 
 def handle_file_upload(request):
     # Check if the post request has the file part
@@ -198,6 +196,10 @@ def makeAnswer(request):
     manager = EmbeddingManager(docName, file_content)
     answer = manager.get_answer(question)
 
+    # If answer is an error dict for oversized file, return a specific error response
+    if isinstance(answer, dict) and answer.get("error") == "oversized_file":
+        return API_JSON_Response({"error": "oversized_file", "message": answer["message"]}, status_code=413)
+
     # Store the question and answer in the history collection
     store_question_answer(request, question, answer, docName)
     return API_JSON_Response({"Answer": answer})
@@ -213,15 +215,23 @@ def makeWikiAnswer(request):
     # Build the Wikipedia QA pipeline
     wiki_manager = WikipediaManager(title)
     wiki_manager.get_retrieval_questions_for_document()
-    if not wiki_manager.get_retrieval_qas():
+    # Check for fuzzy match failure and propagate to frontend
+    if wiki_manager.retrieval_qas is None:
+        # Check if the failure was due to fuzzy match
+        if hasattr(wiki_manager, 'fuzzy_match_failed') and wiki_manager.fuzzy_match_failed:
+            print("[wiki-final] FUZZY MATCH FAILURE: Banner to frontend")
+            return API_JSON_Response({"Error": "WIKI_FUZZY_MATCH_FAILED"}, status_code=400)
+        print("[wiki-final] FAILURE stage=retrieval (no QAs generated)")  # added logs
         return API_JSON_Response({"Error": "Could not retrieve Wikipedia content for the given title."}, status=404)
 
     answer_list = AnswerRetreival(wiki_manager).get_answers(question)
     # get_answers returns a list; pick the first non-empty answer
     answer = next((a for a in answer_list if a), None)
     if not answer:
-        return API_JSON_Response({"Error": "No answer could be generated."}, status=500)
+        print("[wiki-final] FAILURE stage=answer (no answer generated)")  # added logs
+        return API_JSON_Response({"Error": "No answer could be generated."}, status_code=500)
 
+    print(f"[wiki-final] SUCCESS answer_length={len(answer) if isinstance(answer, str) else 'unknown'}")  # added logs
     # Optionally store in history with a wiki prefix
     try:
         store_question_answer(request, question, answer, f"wiki:{title}")
@@ -450,10 +460,11 @@ APP_ROUTES = App_Routes(
     Route(
         url = '/delete-file',
         handler=Route_Handler(
-            DELETE= delete_file
+            POST=delete_file,
+            DELETE=delete_file
         ),
-        permissions=Route_Permissions(POST='user'),
-        log_level= LOG_LEVELS.DEBUG,
+        permissions=Route_Permissions(POST='user', DELETE='user'),
+        log_level=LOG_LEVELS.DEBUG,
         collection_name="files"
     ),
     Route(
