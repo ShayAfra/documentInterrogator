@@ -8,12 +8,14 @@ class SharedNavBar extends StatelessWidget implements PreferredSizeWidget {
   final bool showHamburger;
   final VoidCallback? onHamburgerPressed;
   final VoidCallback? onNewQuestion;
+  final VoidCallback? onSignOut;
 
   const SharedNavBar({
     Key? key,
     this.showHamburger = false,
     this.onHamburgerPressed,
     this.onNewQuestion,
+    this.onSignOut,
   }) : super(key: key);
 
   @override
@@ -58,6 +60,23 @@ class SharedNavBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       centerTitle: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
+      actions: onSignOut != null
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 16.0),
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    textStyle: Theme.of(context).textTheme.labelLarge,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
+                  label: Text('Sign Out', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.error)),
+                  onPressed: onSignOut,
+                ),
+              ),
+            ]
+          : null,
     );
   }
 

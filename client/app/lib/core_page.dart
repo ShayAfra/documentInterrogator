@@ -141,12 +141,27 @@ class _CorePageState extends API_PageState<CorePage> {
             returnedAnswer = jsonDecode(response.body)['Answer'];
           });
         },
-        onError: (response) => handleApiError(context, response, () {
-          print('Failed to send question: \\${response.statusCode}');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to send question.', style: Theme.of(context).textTheme.bodyMedium)),
-          );
-        })
+        onError: (response) {
+          try {
+            final decoded = jsonDecode(response.body);
+            if (response.statusCode == 413 && decoded is Map && decoded['error'] == 'oversized_file') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('AI models can only process a certain amount of text at once. Please use a smaller file.', style: Theme.of(context).textTheme.bodyMedium),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              return;
+            }
+          } catch (_) {}
+          handleApiError(context, response, () {
+            print('Failed to send question: \\${response.statusCode}');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to send question.', style: Theme.of(context).textTheme.bodyMedium)),
+            );
+          });
+        }
       );
     } else {
       // Wikipedia Article tab
@@ -166,7 +181,7 @@ class _CorePageState extends API_PageState<CorePage> {
           try {
             final decoded = jsonDecode(response.body);
             String? answer;
-            if (decoded is List && decoded.isNotEmpty) {
+                        if (decoded is List && decoded.isNotEmpty) {
               final first = decoded.first;
               if (first is Map && first['Answer'] is String) {
                 answer = first['Answer'] as String;
@@ -191,17 +206,60 @@ class _CorePageState extends API_PageState<CorePage> {
             );
           }
         },
-        onError: (response) => handleApiError(context, response, () {
-          print('Failed to send wiki question: \\${response.statusCode}');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to send Wikipedia question.', style: Theme.of(context).textTheme.bodyMedium)),
-          );
-        })
+        onError: (response) {
+          try {
+            final decoded = jsonDecode(response.body);
+            if (response.statusCode == 400 && decoded is Map && decoded['Error'] == 'WIKI_FUZZY_MATCH_FAILED') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Please write the article title exactly.', style: Theme.of(context).textTheme.bodyMedium)),
+              );
+              return;
+            }
+          } catch (_) {}
+          handleApiError(context, response, () {
+            print('Failed to send wiki question: \\${response.statusCode}');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to send Wikipedia question.', style: Theme.of(context).textTheme.bodyMedium)),
+            );
+          });
+        }
       );
     }
   }
 
   // Add a new function to fetch the file list
+  // Delete file by name
+  Future<void> deleteFile(String fileName) async {
+    try {
+      HTTPClient("/delete-file").post(
+        body: {'fileName': fileName},
+        onSuccess: (response) {
+          final resp = jsonDecode(response.body);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(resp['message'] ?? 'File deleted.', style: Theme.of(context).textTheme.bodyMedium)),
+          );
+          fetchFiles();
+          setState(() {
+            if (selectedFile == fileName) selectedFile = null;
+          });
+        },
+        onError: (response) {
+          String msg = 'Failed to delete file.';
+          try {
+            msg = jsonDecode(response.body)['error'] ?? msg;
+          } catch (_) {}
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg, style: Theme.of(context).textTheme.bodyMedium)),
+          );
+        },
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e', style: Theme.of(context).textTheme.bodyMedium)),
+      );
+    }
+  }
+
   // Updated fetchFiles function
   Future<void> fetchFiles() async {
     HTTPClient("/files").get(
@@ -237,6 +295,9 @@ class _CorePageState extends API_PageState<CorePage> {
             returnedAnswer = null;
             questionController.clear();
           });
+        },
+        onSignOut: () {
+          Navigator.pushReplacementNamed(context, '/');
         },
       ),
       drawer: _buildDrawer(),
@@ -375,37 +436,47 @@ class _CorePageState extends API_PageState<CorePage> {
                         FilePickerResult? result =
                             await FilePicker.platform.pickFiles();
                         if (result != null) {
-                          PlatformFile file = result.files.first;
-                          String? fileName = file.name;
-                          String? fileExtension = file.extension;
-                          Uint8List? fileBytes = file.bytes;
-                          String fileBytesBase64 = base64Encode(
-                              fileBytes!);
+  PlatformFile file = result.files.first;
+  String? fileName = file.name;
+  String? fileExtension = file.extension;
+  Uint8List? fileBytes = file.bytes;
+  String fileBytesBase64 = base64Encode(fileBytes!);
 
-                          uploadFile(fileName!, fileExtension!, fileBytesBase64)
-                              .then((_) {
-                            setState(() {
-                              uploadedFiles.add(fileName);
-                              selectedFile = fileName;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('File uploaded successfully!')),
-                            );
-                          }).catchError((error) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to upload file.')),
-                            );
-                          });
-                        } else {
-                          print("No file selected");
-                        }
+  // Duplicate check
+  if (uploadedFiles.contains(fileName)) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text('Duplicate file detected: this file has already been uploaded.'),
+      backgroundColor: Theme.of(context).colorScheme.error,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
+  return;
+}
+
+  uploadFile(fileName!, fileExtension!, fileBytesBase64)
+      .then((_) {
+    setState(() {
+      uploadedFiles.add(fileName);
+      selectedFile = fileName;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('File uploaded successfully!')),
+    );
+  }).catchError((error) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to upload file.')),
+    );
+  });
+} else {
+  print("No file selected");
+}
                       },
                       child: const Text('Upload File'),
                     ),
                   ),
                   SizedBox(width: 256),
                   Container(
-                    width: MediaQuery.of(context).size.width * 0.1,
                     alignment: Alignment.center,
                     child: _buildFileSelectorDropdown(),
                   ),
@@ -496,21 +567,28 @@ class _CorePageState extends API_PageState<CorePage> {
   }
 
   Widget _buildFileSelectorDropdown() {
-    // Placeholder for file selection dropdown
+    // Dropdown with inline delete button and proper spacing
     return Container(
-  decoration: BoxDecoration(
-    border: Border.all(
-      color: Theme.of(context).colorScheme.primary,
-      width: 1.5,
-    ),
-    borderRadius: BorderRadius.circular(12),
-  ),
-  padding: const EdgeInsets.all(AppSpacing.spacingXS),
-  child: DropdownButtonHideUnderline(
-    child: DropdownButton<String>(
-      hint: Padding(
-        padding: const EdgeInsets.only(left: AppSpacing.spacingS),
-        child: Text("Choose a file", style: Theme.of(context).textTheme.labelLarge),
+      width: 400,
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary,
+          width: 1.5,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.spacingS, vertical: AppSpacing.spacingXS),
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          // Dropdown expands to fill available space, no overflow
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                hint: Padding(
+                  padding: const EdgeInsets.only(left: AppSpacing.spacingS),
+                  child: Text("Choose a file", style: Theme.of(context).textTheme.labelLarge),
       ),
       value: selectedFile,
       onChanged: (String? newValue) {
@@ -528,6 +606,51 @@ class _CorePageState extends API_PageState<CorePage> {
       dropdownColor: Theme.of(context).colorScheme.surface,
     ),
   ),
+),
+// Spacing between dropdown and trash icon
+SizedBox(width: AppSpacing.spacingS),
+// Inline delete button
+IconButton(
+  icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
+  tooltip: 'Delete selected file',
+  onPressed: (selectedFile == null)
+      ? null
+      : () async {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              title: Text('Delete File', style: Theme.of(context).textTheme.headlineMedium),
+              content: Text(
+                'Are you sure you want to delete "$selectedFile"? This cannot be undone.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.spacingM, vertical: AppSpacing.spacingS),
+              actions: [
+                TextButton(
+                  child: Text('Cancel', style: Theme.of(context).textTheme.labelLarge),
+                  onPressed: () => Navigator.of(context).pop(false),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                    textStyle: Theme.of(context).textTheme.labelLarge,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text('Delete'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                ),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            await deleteFile(selectedFile!);
+          }
+        },
+),
+],
+),
 );
   }
 

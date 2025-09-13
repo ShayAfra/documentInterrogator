@@ -1,6 +1,8 @@
 import os
 import openai
 import requests
+import difflib
+from thefuzz import fuzz
 from pathlib import Path
 from dotenv import load_dotenv
 from dataclasses import dataclass
@@ -92,6 +94,7 @@ class DocumentProcessor:
                     print(f"Page {i} length: {len(doc.page_content)}")
             text_splitter = CharacterTextSplitter(chunk_size=cfg.chunk_size, chunk_overlap=0)
             texts = text_splitter.split_documents(doc_list)
+            print(f"[doc-chunk] chunks_created={len(texts)}")  # added logs
 
             return self.extract_embeddings(texts, document_path)
 
@@ -106,10 +109,11 @@ class DocumentProcessor:
             return ExtendedChroma(Chroma(persist_directory=embedding_dir, embedding_function=cfg.embeddings), doc_path)
         try:
             chroma_instance = Chroma.from_documents(texts, cfg.embeddings, persist_directory=embedding_dir)
+            print(f"[doc-embed] embeddings_created={len(texts)}")  # added logs
             docsearch = ExtendedChroma(chroma_instance, doc_path)
             docsearch.persist()
         except Exception as e:
-            print(f"Failed to process {doc_path}: {str(e)}")
+            print(f"[doc-embed] ERROR Exception={type(e).__name__} msg=\"{e}\"")  # added logs
             return None  
         return docsearch
     
@@ -165,8 +169,25 @@ class AnswerRetreival:
         """
         Gets answers for a given user's question from document's RetrievalQA systems.
         """
-        answers = [qa.run(user_question) for qa in self.file_manager.get_retrieval_qas()]
-        print(answers)
+        qas = self.file_manager.get_retrieval_qas()  # added logs
+        print(f"[wiki-retrieve] num_qas={len(qas)}")  # added logs
+        model_name = getattr(getattr(qas[0], 'llm', None), 'model_name', 'unknown') if qas else 'unknown'  # added logs
+        print(f"[wiki-answer] model={model_name}")  # added logs
+        answers = []
+        for idx, qa in enumerate(qas):
+            try:
+                # No direct way to get prompt token count from langchain RetrievalQA; skip unless available
+                ans = qa.run(user_question)
+                answers.append(ans)
+            except Exception as e:
+                print(f"[wiki-answer] ERROR Exception={type(e).__name__} msg=\"{e}\" qa_idx={idx}")  # added logs
+                answers.append(None)
+        print(f"[wiki-retrieve] num_answers={len(answers)}")  # added logs
+        for i, ans in enumerate(answers):  # added logs
+            if isinstance(ans, str):  # added logs
+                print(f"[wiki-retrieve] answer_{i}_type=str answer_{i}_len={len(ans)}")  # added logs
+            else:  # added logs
+                print(f"[wiki-retrieve] answer_{i}_type={type(ans).__name__}")  # added logs
         return answers
 
 # What does doc_name:str = None mean. I know str is type casting but what is the none
@@ -222,36 +243,94 @@ class WikipediaManager():
         self.retrieval_qas = None
 
     def fetch_wikipedia_content(self) -> str:
-        params = {
+    # Step 1: Search Wikipedia for the query term using list=search
+        search_params = {
             "action": "query",
-            "titles": self.query_term,
-            "prop": "extracts",
+            "list": "search",
+            "srsearch": self.query_term,
             "format": "json"
         }
-        response = requests.get(self.WIKIPEDIA_API_ENDPOINT, params=params)
-        if response.status_code == 200:
-            wiki_data = response.json()
-            pages = wiki_data.get("query", {}).get("pages", {})
+        user_agent = "DocumentInterrogator/1.0 (contact: shayafra@gmail.com) requests/2.32.3"
+        headers = {"User-Agent": user_agent}
+
+        try:
+            response = requests.get(self.WIKIPEDIA_API_ENDPOINT, params=search_params, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            search_results = data.get("query", {}).get("search", [])
+            if not search_results:
+                print(f"[wiki-search] No results found for: {self.query_term}")
+                return ""
+
+            def _normalize_text(text):
+                import string
+                return ''.join(c for c in text.lower().strip() if c not in string.punctuation)
+
+            normalized_query = _normalize_text(self.query_term)
+
+            # Step 2: Check top N results for best similarity and normalize input
+            SIMILARITY_THRESHOLD = 0.7
+            N = 5
+            best_result = None
+            best_similarity = 0
+            best_title = None
+            for result in search_results[:N]:
+                candidate_title = result.get("title", "")
+                normalized_title = _normalize_text(candidate_title)
+                similarity = fuzz.token_set_ratio(normalized_query, normalized_title) / 100.0
+                print(f"[wiki-fuzzy] token_set_ratio similarity={similarity:.2f} (query='{normalized_query}', title='{normalized_title}')")
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_result = result
+                    best_title = candidate_title
+
+            # Step 3: Enforce threshold
+            if best_similarity < SIMILARITY_THRESHOLD:
+                print(f"[wiki-fuzzy] best similarity below threshold: {best_similarity:.2f} < {SIMILARITY_THRESHOLD}")
+                self.fuzzy_match_failed = True
+                return "__WIKI_FUZZY_MATCH_FAILED__"
+
+            print(f"[wiki-search] Best result: {best_title} (similarity={best_similarity:.2f})")
+
+            # Step 4: Fetch the extract for the best match
+            extract_params = {
+                "action": "query",
+                "titles": best_title,
+                "prop": "extracts",
+                "format": "json"
+            }
+            extract_response = requests.get(self.WIKIPEDIA_API_ENDPOINT, params=extract_params, headers=headers, timeout=10)
+            extract_response.raise_for_status()
+            extract_data = extract_response.json()
+            pages = extract_data.get("query", {}).get("pages", {})
             first_page = next(iter(pages.values()), {})
             wiki_content = first_page.get("extract", "")
+            found = bool(wiki_content)
+            print(f"[wiki-extract] extract_found={found} char_count={len(wiki_content)}")
             return wiki_content
-        else:
-            print(f"Error {response.status_code}: Failed to fetch data from Wikipedia.")
+        except Exception as e:
+            print(f"[wiki-fetch] ERROR Exception={type(e).__name__} msg=\"{e}\" query=\"{self.query_term}\"")
             return ""
-    
+
     def get_retrieval_questions_for_document(self):
         wiki_content = self.fetch_wikipedia_content()
+        if wiki_content == "__WIKI_FUZZY_MATCH_FAILED__":
+            print("Please write the article title exactly.")  # This should trigger a UI banner
+            self.retrieval_qas = None
+            return
         if not wiki_content:
             print("Sorry, no content was found for the provided title/subject.")
-            return None
-        
+            self.retrieval_qas = None
+            return
         self.retrieval_qas = self.get_retrieval_qa_for_wikipedia_content(wiki_content, self.query_term)
 
     def get_retrieval_qa_for_wikipedia_content(self, content: str, title: str):
         cfg = Config()   
         # Create a document from the Wikipedia content
         wiki_document = Document(page_content=content)  
-        docsearch = DocumentProcessor(None).extract_embeddings([wiki_document], Path(f"wiki_{title}"))
+        chunks = [wiki_document]  # added logs (single chunk for now)
+        print(f"[wiki-chunk] chunks_created={len(chunks)}")  # added logs
+        docsearch = DocumentProcessor(None).extract_embeddings(chunks, Path(f"wiki_{title}"))
         if docsearch is None:
             return None       
         return [RetrievalQA.from_chain_type(llm=cfg.llm, chain_type="stuff", retriever=docsearch.as_retriever())]

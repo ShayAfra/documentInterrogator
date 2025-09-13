@@ -49,7 +49,14 @@ class EmbeddingManager():
         retriever = RetrievalQA.from_chain_type(llm=self.llm, retriever=embeddings.as_retriever())
 
         # Send our question to the retriever and get the answer
-        answer = retriever({"query": question})
+        try:
+            answer = retriever({"query": question})
+        except Exception as e:
+            # Check for context_length_exceeded error from OpenAI
+            if hasattr(e, 'args') and e.args and 'context length' in str(e.args[0]).lower():
+                return {"error": "oversized_file", "message": "AI models can only process a certain amount of text at once. Please use a smaller file."}
+            # You can add more fine-grained error checks here if needed
+            raise
 
         if answer:
             return answer['result']
